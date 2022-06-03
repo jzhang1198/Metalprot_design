@@ -8,6 +8,7 @@ This file contains functions for predicting metal binding properties of a given 
 import os
 import json
 import torch
+import scipy
 import numpy as np
 import pandas as pd
 from prody import parsePDB
