@@ -1,0 +1,1 @@
+{"input": 2304, "l1": 2000, "l2": 1000, "l3": 500, "input_dropout": 0.0, "hidden_dropout": 0.0, "output": 48, "batch_size": 51, "lr": 0.0346838274787568, "seed": 449, "epochs": 1000, "encodings": false}
