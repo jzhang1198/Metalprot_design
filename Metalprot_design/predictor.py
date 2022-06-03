@@ -66,7 +66,7 @@ def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: st
 
     deviation = np.array([np.nan] * len(prediction))
     completed = 0
-    for distance_prediction, pointer, resindex_permutation in zip(prediction, list(site_df['source']), list(site_df['identifiers'])):
+    for distance_prediction, pointer, resindex_permutation in zip(prediction, list(site_df['sources']), list(site_df['identifiers'])):
         try:
             source_coordinates = _extract_coordinates(pointer, resindex_permutation)
             solution, rmsd = _triangulate(source_coordinates, distance_prediction)
@@ -87,7 +87,7 @@ def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: st
         'predicted_coordinates': list(solutions),
         'confidence': rmsds,
         'deviation': deviation,
-        'barcode': site_df['barcode'].to_numpy()})
+        'barcodes': site_df['barcodes'].to_numpy()})
 
     predictions.to_pickle(os.path.join(path2output, f'predictions{job_id}.pkl'))
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Author: Jonathan Zhang <jon.zhang@ucsf.edu>
 
@@ -29,11 +31,14 @@ def distribute_tasks(site_df: str):
     return path2output, job_id, tasks   
 
 if __name__ == '__main__':
-    SITE_DF_FILE = ''
+    SITE_DF_FILE = '/wynton/home/rotation/jzhang1198/data/metalprot_design/backbones/sites/test_12_sites.pkl'
 
     with open(SITE_DF_FILE, 'rb') as f:
         site_df = pickle.load(f)
 
+    print(site_df.columns)
+
     path2output, job_id, tasks  = distribute_tasks(site_df)
+    tasks = tasks[0:10]
     predict(path2output, job_id, tasks, path2model='./data/model_no_encodings')
 
