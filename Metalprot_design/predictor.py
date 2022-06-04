@@ -7,6 +7,7 @@ This file contains functions for predicting metal binding properties of a given 
 #imports
 import os
 import json
+from platformdirs import site_data_dir
 import torch
 import scipy
 import numpy as np
@@ -88,7 +89,9 @@ def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: st
         'predicted_coordinates': list(solutions),
         'confidence': rmsds,
         'deviation': deviation,
-        'barcodes': site_df['barcodes'].to_numpy()})
+        'barcodes': site_df['barcodes'].to_numpy(),
+        'sources': list(site_df['sources']),
+        'identifiers': list(site_df['identifiers'])})
 
     predictions.to_pickle(os.path.join(path2output, f'predictions{job_id}.pkl'))
 
