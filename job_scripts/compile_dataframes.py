@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Author: Jonathan Zhang <jon.zhang@ucsf.edu>
 
@@ -10,14 +12,32 @@ import sys
 import pickle
 import pandas as pd
 
+def remove_duplicates(df):
+    identifiers = df['identifiers']
+    df.drop('identifiers', inplace=True, axis=1)
+    identifiers = [tuple(x) for x in list(identifiers)]
+    df['identifiers'] = identifiers
+    df.drop_duplicates(subset=['identifiers', 'sources'], keep='first', inplace=True)
+    
+    return df
+
 if __name__ == '__main__':
     path2output = sys.argv[1]
-    df_files = [os.path.join(path2output, file) for file in os.listdir(path2output) if 'site_df' and '.pkl' in file]
+    df_files = [os.path.join(path2output, file) for file in os.listdir(path2output) if '.pkl' in file]
 
+    total = len(df_files)
+    counter = 0
     for file in df_files:
         with open(file, 'rb') as f:
             _df = pickle.load(f)
 
-        df = pd.concat([df, _df]) if 'df' in locals() else _df
+        df = pd.DataFrame(columns=_df.columns)
+        df = pd.concat([df, _df])
 
-    df.to_pickle(os.path.join(path2output, 'compiled_site_dfs.pkl'))
+        if len(df) > 222500:
+            df = remove_duplicates(df)
+            df.to_pickle(os.path.join(path2output, f'compiled_site_dfs{counter}.pkl'))
+            df = pd.DataFrame(columns=_df.columns)
+
+    df = remove_duplicates(df)
+    df.to_pickle(os.path.join(path2output, f'compiled_site_dfs{counter}.pkl'))

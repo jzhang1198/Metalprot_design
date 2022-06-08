@@ -27,19 +27,19 @@ def distribute_tasks(pdb_dir: str):
     return tasks, path2output, job_id
 
 if __name__ == '__main__':
-    PDB_DIR = '/Users/jonathanzhang/Documents/scratch/test' #directory containing pdb files
+    PDB_DIR = '/wynton/home/rotation/jzhang1198/data/metalprot_design/kehan_ion_channels/backbones' #directory containing pdb files
     CUTOFF = 10 #cutoff distance (in angstroms) that defines a site
     COORDINATION_NUMBER = (2,4) #don't change bottom two variables. the model was trained with 2-4 coordinate binding sites including the neighrbors to the immediate left or right of a given coordinating residue
     NO_NEIGHBORS = 1
 
     tasks, path2output, job_id = distribute_tasks(PDB_DIR)
     for task in tasks:
-        try:
-            _site_df = identify_sites(task, CUTOFF, COORDINATION_NUMBER, NO_NEIGHBORS) #identify putative binding cores and get distance matrices
-            site_df = pd.concat([site_df, _site_df]) if 'site_df' in locals() else _site_df
+        # try:
+        _site_df = identify_sites(task, CUTOFF, COORDINATION_NUMBER, NO_NEIGHBORS) #identify putative binding cores and get distance matrices
+        site_df = pd.concat([site_df, _site_df]) if 'site_df' in locals() else _site_df
 
-        except:
-            with open(os.path.join(path2output, 'failed.txt'), 'a') as f:
-                f.write(task + '\n')
+        # except:
+        #     with open(os.path.join(path2output, 'failed.txt'), 'a') as f:
+        #         f.write(task + '\n')
 
     site_df.to_pickle(os.path.join(path2output, f'site_df{job_id}.pkl')) #write dataframe to a pickle file
