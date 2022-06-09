@@ -3,14 +3,25 @@
 Code for running metal site prediction on input backbones. DeGrado lab 2022.
 
 ## Installation
-This repo is a pip installable module. To run any of the code contained in <code>job_scripts</code>, you will need to pip install this repo to a virtual environment. To do this, you will need to execute the following steps:
+This repo is a pip installable module. To run any of the code contained in <code>job_scripts</code>, you will need to pip install this repo to a virtual environment. To do this, you will need to first clone the repo to your local device using the command below.
+```
+git clone [link to Metalprot_design]
+```
 
-1) Clone the repo if you haven't done so already. Use the following command: <code>git clone [link to Metalprot_design]</code>
+Create a new conda environment and install the dependencies necessary to run the code.
+```
+conda env create -f environment.yml
+```
 
-2) In the root directory of the cloned repo, create a new conda environment entitled <code>Metalprot_design</code> using the following command: <code>conda env create -f environment.yml</code>. This environment contains all necessary dependencies. 
-    * Note: I had some issues installing PyPivoter. You can manually install this dependency using pip --target
+If you had problems installing [PyPivoter](https://github.com/rckormos/PyPivoter) to the designated environment, you may need to manually install it. To do this, run
+```
+pip install --target=<path2sitepackages> pypivoter
+```
 
-3) Pip install the repo by running <code>pip install .</code>.
+After installing dependencies, install the module. Make sure you in the root directory and have your new environment activated.
+```
+pip install .
+```
 
 ## Running Jobs
-The scripts in <code>job_scipts</code> execute enumeration of possible metal binding sites in input structures and prediction of metal binding for each site. 
+All jobs can be run using the wrapper script <code>run_jobs.py</code> in the root directory. 
