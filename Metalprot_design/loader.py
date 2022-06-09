@@ -82,7 +82,6 @@ def get_ca_cb(backbone_coords: np.ndarray):
 
     return ca_cb, ori
 
-
 def _filter(adjacency_list: np.ndarray, structure: AtomGroup, contiguous_helices: dict, helix_identifiers: dict, angle_cutoff: float):
     all_resindices = set(np.concatenate(list(adjacency_list)))
     coordinates = dict([(resindex, structure.select('protein').select('name C CA N').select(f'resindex {resindex}').getCoords()) for resindex in all_resindices])
