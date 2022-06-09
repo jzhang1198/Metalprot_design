@@ -24,4 +24,11 @@ pip install .
 ```
 
 ## Running Jobs
-All jobs can be run using the wrapper script <code>run_jobs.py</code> in the root directory. 
+All jobs can be run using the wrapper script <code>run_jobs.py</code> in the root directory. The general syntax for running jobs from the command line using <code>run_jobs.py</code> is as follows.
+```
+./run_jobs.py job_name path2output ./job_scripts/job_script.py [options]
+``` 
+
+<code>job_name</code> is simply the user-defined name of the job. <code>path2output</code> is the path where output files should be written to. Refer to the docstring for more information on the options.
+
+Keep in mind that there are a few variables you will need to define within each script under <code>job_scripts</code>. These variables are in all caps. 
