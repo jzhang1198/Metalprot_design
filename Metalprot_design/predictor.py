@@ -7,7 +7,6 @@ This file contains functions for predicting metal binding properties of a given 
 #imports
 import os
 import json
-from platformdirs import site_data_dir
 import torch
 import scipy
 import numpy as np
