@@ -1,0 +1,17 @@
+name: Metalprot_design
+channels:
+  - salilab
+  - defaults
+dependencies:
+  - python=3.9.12
+  - torchvision
+  - pytorch
+  - pandas
+  - dssp
+  - pip=21.2.4
+  - pip:
+    - biopython==1.76
+    - numpy==1.22.4
+    - prody==2.2.0
+    - scipy==1.8.1
+prefix: /opt/anaconda3/envs/Metalprot_design
