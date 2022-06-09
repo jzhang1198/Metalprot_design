@@ -28,7 +28,7 @@ def distribute_tasks(pdb_dir: str):
 
 if __name__ == '__main__':
     PDB_DIR = '/Users/jonathanzhang/Documents/scratch/test' #directory containing pdb files
-    CUTOFF = 10 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
+    CUTOFF = 12 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
 
     tasks, path2output, job_id = distribute_tasks(PDB_DIR)
     for task in tasks:
