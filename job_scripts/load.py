@@ -27,7 +27,7 @@ def distribute_tasks(pdb_dir: str):
     return tasks, path2output, job_id
 
 if __name__ == '__main__':
-    PDB_DIR = '/wynton/home/rotation/jzhang1198/data/metalprot_design/kehan_ion_channels/backbones' #directory containing pdb files
+    PDB_DIR = '/Users/jonathanzhang/Documents/scratch/test' #directory containing pdb files
     CUTOFF = 10 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
 
     tasks, path2output, job_id = distribute_tasks(PDB_DIR)
