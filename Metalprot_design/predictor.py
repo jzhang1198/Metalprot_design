@@ -11,7 +11,7 @@ import torch
 import scipy
 import numpy as np
 import pandas as pd
-from prody import parsePDB
+from prody import parsePDB, AtomGroup
 from Metalprot_design.model import DoubleLayerNet
 
 def _load_neural_net(path2model: str):
@@ -44,7 +44,7 @@ def _triangulate(backbone_coords, distance_prediction):
 
     return solution, rmsd
 
-def _extract_coordinates(source_file: str, identifier_permutation):
+def _extract_coordinates_old(source_file: str, identifier_permutation):
     """_summary_
 
     Args:
@@ -59,7 +59,7 @@ def _extract_coordinates(source_file: str, identifier_permutation):
 
     return coordinates
 
-def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: str):
+def predict_old(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: str):
 
     model = _load_neural_net(path2model)
     X = np.vstack([array for array in site_df['features']])
@@ -89,6 +89,50 @@ def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: st
         'confidence': rmsds,
         'deviation': deviation,
         'barcodes': site_df['barcodes'].to_numpy(),
+        'sources': list(site_df['sources']),
+        'identifiers': list(site_df['identifiers'])})
+
+    predictions.to_pickle(os.path.join(path2output, f'predictions{job_id}.pkl'))
+
+    print(f'Coordinates and RMSDs computed for {completed} out of {len(prediction)} observations.')
+
+def _extract_coordinates(core: AtomGroup, identifiers: list):
+
+    for iteration, id in enumerate(identifiers):
+        residue = core.select(f'chain {id[1]}').select(f'resnum {id[0]}').select('name C CA N O').getCoords()
+        coordinates = residue if iteration == 0 else np.vstack([coordinates, residue])
+    return coordinates
+
+def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: str):
+    model = _load_neural_net(path2model)
+    X = np.vstack([array for array in site_df['features']])
+    prediction = model.forward(torch.from_numpy(X)).cpu().detach().numpy()
+
+    ag_dict = dict([(pointer, parsePDB(pointer).select('protein').select('name N C CA O')) for pointer in set(list(site_df['sources']))])
+    deviation = np.array([np.nan] * len(prediction))
+    completed = 0
+    for distance_prediction, pointer, identifiers in zip(prediction, list(site_df['sources']), list(site_df['identifiers'])):
+
+        try:
+            source_coordinates = _extract_coordinates(ag_dict[pointer], identifiers)
+            solution, rmsd = _triangulate(source_coordinates, distance_prediction)
+            completed += 1
+
+        except:
+            solution, rmsd = np.array([np.nan, np.nan, np.nan]), np.nan
+
+        if 'solutions' not in locals():
+            solutions = solution
+            rmsds = rmsd
+
+        else:
+            solutions = np.vstack([solutions, solution])
+            rmsds = np.append(rmsds, rmsd)
+
+    predictions = pd.DataFrame({'predicted_distances': list(prediction),
+        'predicted_coordinates': list(solutions),
+        'confidence': rmsds,
+        'deviation': deviation,
         'sources': list(site_df['sources']),
         'identifiers': list(site_df['identifiers'])})
 
