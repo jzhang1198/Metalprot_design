@@ -27,17 +27,11 @@ def distribute_tasks(pdb_dir: str):
     return tasks, path2output, job_id
 
 if __name__ == '__main__':
-    PDB_DIR = '/wynton/home/rotation/jzhang1198/data/metalprot_design/katie_his_kinases/1f4m_323' #directory containing pdb files
-    CUTOFF = 12 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
+    PDB_DIR = '/Users/jonathanzhang/Documents/ucsf/degrado/data/metalprot_design/katie_his_kinases/backbones/' #directory containing pdb files
+    CUTOFF = 10 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
 
     tasks, path2output, job_id = distribute_tasks(PDB_DIR)
     for task in tasks:
-        # try:
-        _site_df = identify_sites_rational(task, CUTOFF, None) #identify putative binding cores and get distance matrices
-        site_df = pd.concat([site_df, _site_df]) if 'site_df' in locals() else _site_df
-
-        # except:
-        #     with open(os.path.join(path2output, 'failed.txt'), 'a') as f:
-        #         f.write(task + '\n')
-
-    site_df.to_pickle(os.path.join(path2output, f'site_df{job_id}.pkl')) #write dataframe to a pickle file
+        name = task.split('/')[-1].split('.')[0]
+        site_df = identify_sites_rational(task, CUTOFF) #identify putative binding cores and get distance matrices
+        site_df.to_pickle(os.path.join(path2output, f'{name}_site_df{job_id}.pkl')) #write dataframe to a pickle file
