@@ -65,6 +65,57 @@ def _get_neighbors(structure, resind: int, no_neighbors: int):
 
     return fragment
 
+def get_ca_cb(backbone_coords: np.ndarray):
+    ca_n = backbone_coords[0] - backbone_coords[1]
+    ca_n = ca_n / np.linalg.norm(ca_n)
+    ca_c = backbone_coords[2] - backbone_coords[1]
+    ca_c = ca_c / np.linalg.norm(ca_c)
+    n2 = np.cross(ca_n, ca_c) 
+    n2 = n2 / np.linalg.norm(n2)
+    n1 = ((ca_n + ca_c) / np.linalg.norm(ca_n + ca_c)) * -1
+    
+    d = (1.54*np.sin(np.deg2rad(54.75)))*n2
+    v = (1.54*np.cos(np.deg2rad(54.75)))*n1
+
+    ca_cb = d + v
+    ori = backbone_coords[1]
+
+    return ca_cb, ori
+
+
+def _filter(adjacency_list: np.ndarray, structure: AtomGroup, contiguous_helices: dict, helix_identifiers: dict, angle_cutoff: float):
+    all_resindices = set(np.concatenate(list(adjacency_list)))
+    coordinates = dict([(resindex, structure.select('protein').select('name C CA N').select(f'resindex {resindex}').getCoords()) for resindex in all_resindices])
+    no_helices = np.array([len(set([contiguous_helices[helix_identifiers[resnum]] for resnum in edge])) for edge in adjacency_list])
+    single_helix_inds = np.argwhere(no_helices == 1)
+    double_helix_inds = np.argwhere(no_helices > 1)
+
+    n_i, n_j = np.vstack([coordinates[resindex][0].flatten() for resindex in adjacency_list[:,0]]), np.vstack([coordinates[resindex][0].flatten() for resindex in adjacency_list[:,1]])
+    ca_i, ca_j = np.vstack([coordinates[resindex][1].flatten() for resindex in adjacency_list[:,0]]), np.vstack([coordinates[resindex][1].flatten() for resindex in adjacency_list[:,1]])
+    c_i, c_j = np.vstack([coordinates[resindex][2].flatten() for resindex in adjacency_list[:,0]]), np.vstack([coordinates[resindex][2].flatten() for resindex in adjacency_list[:,1]])
+
+    ca_n_i, ca_n_j = np.vstack([(1 / np.linalg.norm(n_i - ca_i, axis=1))]*3).T * (n_i - ca_i), np.vstack([(1 / np.linalg.norm(n_j - ca_j, axis=1))]*3).T * (n_j - ca_j)
+    ca_c_i, ca_c_j = np.vstack([(1 / np.linalg.norm(c_i - ca_i, axis=1))]*3).T * (c_i - ca_i), np.vstack([(1 / np.linalg.norm(c_j - ca_j, axis=1))]*3).T * (c_j - ca_j)
+
+    n1_i, n1_j = (ca_n_i + ca_c_i) * -1, (ca_n_j + ca_c_j) * -1
+    n2_i, n2_j = np.cross(ca_n_i, ca_c_i, axis=1), np.cross(ca_n_j, ca_c_j, axis=1)
+    n1_i, n1_j = np.vstack([(1 / np.linalg.norm(n1_i, axis=1))]*3).T * n1_i, np.vstack([(1 / np.linalg.norm(n1_j, axis=1))]*3).T * n1_j
+    n2_i, n2_j = np.vstack([(1 / np.linalg.norm(n2_i, axis=1))]*3).T * n2_i, np.vstack([(1 / np.linalg.norm(n2_j, axis=1))]*3).T * n2_j
+    
+    di, dj = (1.54*np.sin(np.deg2rad(54.75))) * n2_i, (1.54*np.sin(np.deg2rad(54.75))) * n2_j
+    vi, vj = (1.54*np.cos(np.deg2rad(54.75))) * n1_i, (1.54*np.cos(np.deg2rad(54.75))) * n1_j
+
+    ca_cb_i, ca_cb_j = di+vi, dj+vj
+    dot = np.sum(ca_cb_i * ca_cb_j, axis=1)
+    norm_i, norm_j = np.linalg.norm(ca_cb_i, axis=1), np.linalg.norm(ca_cb_j, axis=1)
+    angles = np.degrees(np.arccos(dot / (norm_i * norm_j)))
+    obtuse_indices = np.argwhere(angles >= angle_cutoff)[0]
+    acute_indices = np.argwhere(angles <= angle_cutoff)
+
+    passed_indices = np.concatenate((np.intersect1d(single_helix_inds, acute_indices), np.intersect1d(double_helix_inds, obtuse_indices)))
+    filtered = adjacency_list[passed_indices]
+    return filtered
+
 def identify_sites(pdb_file: str, cuttoff: float, coordination_number: tuple, no_neighbors: int):
 
     features, identifiers, sources, barcodes = [], [], [], []
@@ -105,41 +156,6 @@ def identify_sites(pdb_file: str, cuttoff: float, coordination_number: tuple, no
     site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': sources, 'barcodes': barcodes})
     return site_df
 
-
-def _get_ca_cb(backbone_coords: np.ndarray):
-    ca_n = backbone_coords[0] - backbone_coords[1]
-    ca_n = ca_n / np.linalg.norm(ca_n)
-    ca_c = backbone_coords[2] - backbone_coords[1]
-    ca_c = ca_c / np.linalg.norm(ca_c)
-    n2 = np.cross(ca_n, ca_c) 
-    n2 = n2 / np.linalg.norm(n2)
-    n1 = ((ca_n + ca_c) / np.linalg.norm(ca_n + ca_c)) * -1
-    
-    d = (1.54*np.sin(np.deg2rad(54.75)))*n2
-    v = (1.54*np.cos(np.deg2rad(54.75)))*n1
-
-    ca_cb = d + v
-    ori = backbone_coords[1]
-
-    return ca_cb, ori
-
-def _filter(adjacency_list: np.ndarray, structure: AtomGroup, angle_cutoff: float):
-
-    filtered = []
-    coords_i = structure.select('protein').select(f'resindex {adjacency_list[0,0]}').select('name C CA N O').getCoords()
-    for adjacency in adjacency_list:
-        coords_j =  structure.select('protein').select(f'resindex {adjacency[1]}').select('name C CA N O').getCoords()
-        cb_veci = _get_ca_cb(coords_i)
-        cb_vecj = _get_ca_cb(coords_j)
-
-        dot = cb_veci.dot(cb_vecj)
-        angle = np.degrees(np.arccos(dot / (np.linalg.norm(cb_veci) * np.linalg.norm(cb_vecj))))
-        
-        if angle < angle_cutoff:
-            filtered.append(adjacency)
-
-    return filtered
-
 def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, coordination_number: tuple, no_neighbors: int):
     features, identifiers, sources = [], [], []
 
@@ -152,7 +168,7 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, 
     helix_resindices = [structure.select(f'chid {tup[1]}').select(f'resnum {tup[0]}').getResindices()[0] for tup in contiguous_helices.keys()]
     helix_resindices.sort()
     helix_resindices_selstr = 'resindex ' + ' '.join([str(i) for i in helix_resindices])
-    helix_identifiers = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in helix_resindices])
+    resind2id = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in set(structure.select('protein').getResindices())])
 
     #build alpha carbon distance matrix. iterate through columns and enumerate pairs of residues that are within a cutoff distance.
     ca_dist_mat = buildDistMatrix(c_alphas.select(helix_resindices_selstr), c_alphas.select(helix_resindices_selstr))
@@ -165,15 +181,19 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, 
             if distance <= cuttoff:
                 adjacency_list.append(np.array([helix_resindices[col_ind], helix_resindices[row_ind]]))
 
-        #remove pairs of residues that have diverging alpha caarbon-beta carbon vectors
-        filtered_adjacency_list = np.vstack(_filter(adjacency_list, structure, angle_cutoff))
-        cliques = enumerateCliques(filtered_adjacency_list, coordination_number[1])
-        
-        #drop cliques that are under lower limit on coordination number
+        row_indexer += 1
+    adjacency_list = np.vstack(adjacency_list)
+    resind2map = dict([(resind, index) for index, resind in enumerate(np.sort(np.unique(adjacency_list.flatten())))])
+    map2resind = dict([(index, resind) for index, resind in enumerate(np.sort(np.unique(adjacency_list.flatten())))])
 
-        #get neighbors and build flattened distance matrices
-        for _clique in cliques:
-            clique = sum([_get_neighbors(structure, resind, no_neighbors) for resind in list(_clique)], [])
+    mapped_adjacency_list = np.vectorize(resind2map.get)(adjacency_list)
+    cliques = enumerateCliques(mapped_adjacency_list, 0)[coordination_number[0]:coordination_number[1]+1]
+    cliques = [np.vectorize(map2resind.get)(clique) for clique in cliques]
+
+    #get neighbors and build flattened distance matrices
+    for sub_cliques in cliques:
+        for _clique in sub_cliques:
+            clique = set(sum([_get_neighbors(structure, resind, no_neighbors) for resind in list(_clique)], []))
             selstr = 'resindex ' + ' '.join([str(i) for i in clique])
             clique_backbone = structure.select('protein').select('name N C CA O').select(selstr)
 
@@ -182,10 +202,8 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, 
             assert len(flattened_dist_mat) == 2304
 
             features.append(flattened_dist_mat)
-            identifiers.append([helix_identifiers[resind] for resind in clique])
+            identifiers.append([resind2id[resind] for resind in clique])
             sources.append(pdb_file)
-
-        row_indexer += 1
 
     site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': sources})
     return site_df
