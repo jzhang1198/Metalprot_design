@@ -156,7 +156,7 @@ def identify_sites(pdb_file: str, cuttoff: float, coordination_number: tuple, no
     site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': sources, 'barcodes': barcodes})
     return site_df
 
-def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, coordination_number: tuple, no_neighbors: int):
+def identify_sites_rational(pdb_file: str, cuttoff: float, angle_cutoff: float, coordination_number=(2,4), no_neighbors=1):
     features, identifiers, sources = [], [], []
 
     max_atoms = 4 * (coordination_number[1] + (coordination_number[1] * no_neighbors * 2))

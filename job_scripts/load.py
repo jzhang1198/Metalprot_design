@@ -10,7 +10,7 @@ This script runs distributed site identification on an input set of pdb files.
 import os
 import sys
 import pandas as pd
-from Metalprot_design.loader import identify_sites
+from Metalprot_design.loader import identify_sites_rational
 
 def distribute_tasks(pdb_dir: str):
     path2output = sys.argv[1] #path to store outputs  
@@ -28,14 +28,12 @@ def distribute_tasks(pdb_dir: str):
 
 if __name__ == '__main__':
     PDB_DIR = '/wynton/home/rotation/jzhang1198/data/metalprot_design/kehan_ion_channels/backbones' #directory containing pdb files
-    CUTOFF = 10 #cutoff distance (in angstroms) that defines a site
-    COORDINATION_NUMBER = (2,4) #don't change bottom two variables. the model was trained with 2-4 coordinate binding sites including the neighrbors to the immediate left or right of a given coordinating residue
-    NO_NEIGHBORS = 1
+    CUTOFF = 10 #cutoff distance (in angstroms) that defines a site. i've found that 10A should do the trick for almost all metal binding sites
 
     tasks, path2output, job_id = distribute_tasks(PDB_DIR)
     for task in tasks:
         # try:
-        _site_df = identify_sites(task, CUTOFF, COORDINATION_NUMBER, NO_NEIGHBORS) #identify putative binding cores and get distance matrices
+        _site_df = identify_sites_rational(task, CUTOFF, None) #identify putative binding cores and get distance matrices
         site_df = pd.concat([site_df, _site_df]) if 'site_df' in locals() else _site_df
 
         # except:
