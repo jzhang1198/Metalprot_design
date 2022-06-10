@@ -5,15 +5,6 @@ This file contains functions for loading structures for metal binding prediction
 """
 
 #imports 
-from pypivoter.degeneracy_cliques import enumerateCliques, countCliques
-from prody import parsePDB, buildDistMatrix, AtomGroup
-from Bio.PDB.DSSP import dssp_dict_from_pdb_file
-import numpy as np
-import pandas as pd
-import itertools
-import operator
-
-#imports 
 from pypivoter.degeneracy_cliques import enumerateCliques
 from prody import parsePDB, buildDistMatrix, AtomGroup
 from Bio.PDB.DSSP import dssp_dict_from_pdb_file
