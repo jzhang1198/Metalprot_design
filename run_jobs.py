@@ -31,6 +31,9 @@ Options:
 
     --processing-unit=<P>, -p=<P>  [default: cpu]
         Defines the type of processing unit to run job on. Y designates GPU usage.
+
+    --memory=<M>. -m=<M>  [default: 3]
+        Defines the memory to allocate for each task.
 '''
 
 import docopt
@@ -38,7 +41,7 @@ import shutil
 import os
 import subprocess
 
-def run_SGE(job_name: str, num_jobs: int, path: str, job_script: str, time: str, processing_unit: str, mem_free_GB=3, scratch_space_GB=1, keep_job_output_path=True):
+def run_SGE(job_name: str, num_jobs: int, path: str, job_script: str, time: str, processing_unit: str, mem_free_GB: int, scratch_space_GB=1, keep_job_output_path=True):
 
     """Runs SGE job on UCSF Wynton cluster.
 
@@ -65,6 +68,7 @@ def run_SGE(job_name: str, num_jobs: int, path: str, job_script: str, time: str,
                      + ['-N', job_name,
                         '-t', '1-{0}'.format(num_jobs),
                         '-l', 'h_rt={0}'.format(time),
+                        '-l', 'mem_free={0}G'.format(mem_free_GB),
                         '-o', job_output_path,
                         '-e', job_output_path,
                         './job_scripts/activate_env.sh',
@@ -100,7 +104,7 @@ if __name__ == '__main__':
 
     if arguments['--job-distributor'] == 'SGE':
         num_jobs = arguments['--num-jobs'] if arguments['--num-jobs'] else '1'
-        run_SGE(job_name, num_jobs, path, job_script, arguments['--time'], arguments['--processing-unit'])
+        run_SGE(job_name, num_jobs, path, job_script, arguments['--time'], arguments['--processing-unit'], arguments['--memory'])
 
     elif arguments['--job-distributor'] == 'sequential':
         run_sequential(job_name, path, job_script)
