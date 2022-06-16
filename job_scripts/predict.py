@@ -31,7 +31,7 @@ def distribute_tasks(site_df: str):
     return path2output, job_id, tasks   
 
 if __name__ == '__main__':
-    SITE_DF_FILE = '/Users/jonathanzhang/Documents/scratch/test/out/site_df0.pkl'
+    SITE_DF_FILE = '/wynton/home/rotation/jzhang1198/data/metalprot_design/katie_his_kinases/sites/compiled_site_dfs0.pkl'
 
     with open(SITE_DF_FILE, 'rb') as f:
         site_df = pickle.load(f)

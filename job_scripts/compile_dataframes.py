@@ -31,13 +31,9 @@ if __name__ == '__main__':
         with open(file, 'rb') as f:
             _df = pickle.load(f)
 
-        df = pd.DataFrame(columns=_df.columns)
-        df = pd.concat([df, _df])
+        print(len(_df))
 
-        if len(df) > 222500:
-            df = remove_duplicates(df)
-            df.to_pickle(os.path.join(path2output, f'compiled_site_dfs{counter}.pkl'))
-            df = pd.DataFrame(columns=_df.columns)
+        df = pd.concat([df, _df]) if 'df' in locals() else _df
+        print(len(df))
 
-    df = remove_duplicates(df)
     df.to_pickle(os.path.join(path2output, f'compiled_site_dfs{counter}.pkl'))

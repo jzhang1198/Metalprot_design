@@ -98,9 +98,13 @@ def predict_old(path2output: str, job_id: int, site_df: pd.DataFrame, path2model
 
 def _extract_coordinates(core: AtomGroup, identifiers: list):
 
-    for iteration, id in enumerate(identifiers):
-        residue = core.select(f'chain {id[1]}').select(f'resnum {id[0]}').select('name C CA N O').getCoords()
-        coordinates = residue if iteration == 0 else np.vstack([coordinates, residue])
+    resinds = [core.select(f'chid {tup[1]}').select(f'resnum {tup[0]}').getResindices()[0] for tup in identifiers]
+    selstr = 'resindex ' + ' '.join([str(i) for i in resinds])
+    coordinates = core.select(selstr).getCoords() 
+
+    # for iteration, id in enumerate(identifiers):
+    #     residue = core.select(f'chain {id[1]}').select(f'resnum {id[0]}').select('name C CA N O').getCoords()
+    #     coordinates = residue if iteration == 0 else np.vstack([coordinates, residue])
     return coordinates
 
 def predict(path2output: str, job_id: int, site_df: pd.DataFrame, path2model: str):
