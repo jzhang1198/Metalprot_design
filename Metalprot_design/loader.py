@@ -123,7 +123,7 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, coordination_number=(
     map2resind = dict([(index, resind) for index, resind in enumerate(np.sort(np.unique(adjacency_list.flatten())))])
 
     mapped_adjacency_list = np.vectorize(resind2map.get)(adjacency_list)
-    cliques = enumerateCliques(mapped_adjacency_list, 0)[coordination_number[0]:coordination_number[1]+1]
+    cliques = enumerateCliques(mapped_adjacency_list, coordination_number[1])[coordination_number[0]:]
     cliques = [np.vectorize(map2resind.get)(clique) for clique in cliques]
 
     #get neighbors and build flattened distance matrices
