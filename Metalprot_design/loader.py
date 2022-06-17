@@ -28,7 +28,7 @@ def _get_helices(pdb_file: str, c_alphas: AtomGroup):
     dict = {}
     for ind in range(0, len(contiguous_helices)):
         for identifier in contiguous_helices[ind]:
-            dict[identifier] = ind
+            dict[c_alphas.select(f'chid {identifier[1]}').select(f'resnum {identifier[0]}').getResindices()[0]] = ind
 
     return dict
 
@@ -74,7 +74,7 @@ def _compute_angles(vec1: np.ndarray, vec2: np.ndarray):
     angles = np.degrees(np.arccos(dot / (norm1 * norm2)))
     return angles
 
-def _filter(adjacency_list: np.ndarray, structure: AtomGroup, distances: np.ndarray):
+def _filter_by_angle(adjacency_list: np.ndarray, structure: AtomGroup, distances: np.ndarray):
     all_resindices = set(np.concatenate(list(adjacency_list)))
     coordinates = dict([(resindex, structure.select('protein').select('name C CA N').select(f'resindex {resindex}').getCoords()) for resindex in all_resindices])
 
@@ -86,11 +86,22 @@ def _filter(adjacency_list: np.ndarray, structure: AtomGroup, distances: np.ndar
     angles_i, angles_j = _compute_angles(ca_cb_i, ca_i_ca_j), _compute_angles(ca_cb_j, ca_i_ca_j)
 
     accepted = np.argwhere(distances <= 7)
-    filtered_inds = np.intersect1d(np.intersect1d(np.argwhere(angles_i < 140), np.argwhere(angles_j > 35)), np.argwhere(distances > 7))
+    filtered_inds = np.intersect1d(np.intersect1d(np.argwhere(angles_i < 130), np.argwhere(angles_j > 30)), np.argwhere(distances > 7))
     filtered = adjacency_list[np.union1d(accepted, filtered_inds)]
     return filtered
 
-def identify_sites_rational(pdb_file: str, cuttoff: float, coordination_number=(2,4), no_neighbors=1):
+def _filter_by_no_helices(cliques: list, mappings: dict, helix_cutoff: int):
+    filtered_cliques = []
+    for clique in cliques:
+        mapped = np.vectorize(mappings.get)(clique)
+        mapped = np.sort(mapped, axis=1)
+        no_helices = (mapped[:,1:] != mapped[:,:-1]).sum(axis=1) + 1
+        indices = np.argwhere(no_helices >= helix_cutoff)
+        filtered_cliques.append(clique[indices].squeeze())
+
+    return filtered_cliques
+
+def identify_sites_rational(pdb_file: str, cutoff: float, helix_cutoff: int, coordination_number=(2,4), no_neighbors=1):
     features, identifiers, sources = [], [], []
 
     max_atoms = 4 * (coordination_number[1] + (coordination_number[1] * no_neighbors * 2))
@@ -98,8 +109,8 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, coordination_number=(
     c_alphas = structure.select('protein').select('name CA')
 
     #enumerate all helical residues in the input structure
-    contiguous_helices = _get_helices(pdb_file, c_alphas)
-    helix_resindices = [structure.select(f'chid {tup[1]}').select(f'resnum {tup[0]}').getResindices()[0] for tup in contiguous_helices.keys()]
+    helix_map = _get_helices(pdb_file, c_alphas)
+    helix_resindices = list(helix_map.keys())
     helix_resindices.sort()
     helix_resindices_selstr = 'resindex ' + ' '.join([str(i) for i in helix_resindices])
     resind2id = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in set(structure.select('protein').getResindices())])
@@ -113,18 +124,24 @@ def identify_sites_rational(pdb_file: str, cuttoff: float, coordination_number=(
         for row_ind in range(1+row_indexer, len(ca_dist_mat)):
             distance = ca_dist_mat[row_ind, col_ind]
 
-            if distance <= cuttoff:
+            if distance <= cutoff:
                 adjacency_list.append(np.array([helix_resindices[col_ind], helix_resindices[row_ind]]))
                 edge_weights = np.append(edge_weights, distance)
 
         row_indexer += 1
-    adjacency_list = _filter(np.vstack(adjacency_list), structure, edge_weights)
+
+    adjacency_list = _filter_by_angle(np.vstack(adjacency_list), structure, edge_weights)
     resind2map = dict([(resind, index) for index, resind in enumerate(np.sort(np.unique(adjacency_list.flatten())))])
     map2resind = dict([(index, resind) for index, resind in enumerate(np.sort(np.unique(adjacency_list.flatten())))])
 
     mapped_adjacency_list = np.vectorize(resind2map.get)(adjacency_list)
+    assert np.max(mapped_adjacency_list) == len(np.unique(mapped_adjacency_list)) - 1
+
     cliques = enumerateCliques(mapped_adjacency_list, coordination_number[1])[coordination_number[0]:]
     cliques = [np.vectorize(map2resind.get)(clique) for clique in cliques]
+
+    if helix_cutoff:
+        cliques = _filter_by_no_helices(cliques, helix_map, helix_cutoff)
 
     #get neighbors and build flattened distance matrices
     for sub_cliques in cliques:
