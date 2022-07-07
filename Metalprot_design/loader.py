@@ -174,6 +174,38 @@ def _filter_by_no_helices(cliques: list, mappings: dict, helix_cutoff: int):
 
     return filtered_cliques
 
+def _trim(dist_mat: np.ndarray):
+    trimmed = []
+    for row_ind, indexer in zip(range(0, len(dist_mat)-1), range(1, len(dist_mat))):
+        trimmed.append(dist_mat[row_ind][indexer:])
+
+    trimmed = np.concatenate(trimmed)
+    return trimmed
+
+def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: int, trim=False):
+    backbone = structure.select('protein').select('name N C CA CB O') if c_beta else structure.select('protein').select('name N C CA O')
+    dist_mat = buildDistMatrix(backbone, backbone)
+
+    no_resis = len(set(backbone.getResindices()))
+    splits = [np.vsplit(x, no_resis) for x in np.hsplit(dist_mat, no_resis)]
+
+    combinations = [(i,j) for i in range(0, no_resis) for j in range(0, no_resis)]
+    split_mapper = dict([(combination, splits[ind]) for combination, ind in zip(combinations, range(len(combinations)))])
+
+    dist_mats = []
+    for clique in cliques:
+        combinations = [(i,j) for i in clique for j in clique]
+        _sub_matrices = [split_mapper[combination] for combination in combinations]
+        sub_matrices = [_sub_matrices[i:i + len(clique)] for i in range(0, len(_sub_matrices))]
+        matrix = np.block(sub_matrices)
+
+        padding = max_atoms - len(matrix)
+        matrix = np.lib.pad(matrix, ((0,padding), (0,padding)), 'constant', constant_values=0)
+        matrix = _trim(dist_mat) if trim else matrix.flatten()
+        dist_mats.append(matrix)
+
+    return dist_mats
+
 def identify_sites_rational(pdb_file: str, cutoff: float, helix_cutoff: int, coordination_number=(2,4), no_neighbors=1):
     """Main function that runs site enumeration.
 
