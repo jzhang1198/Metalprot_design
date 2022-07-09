@@ -45,7 +45,13 @@ def _get_helices(pdb_file: str, c_alphas: AtomGroup):
 
     return dict
 
-def _get_neighbors(structure, resind: int, no_neighbors: int):
+def _construct_chain_dict(structure: AtomGroup):
+    resinds = structure.select('protein').getResindices()
+    chains = structure.getChids()
+    chain_dict = dict([(resind, set(list(structure.select(f'chain {chid}').getResindices()))) for resind, chid in zip(resinds, chains)])
+    return chain_dict
+
+def _get_neighbors(resind: int, no_neighbors: int, chain_dict: dict):
     """Helper function. Finds neighbors of an input coordinating residue.
 
     Args:
@@ -58,8 +64,7 @@ def _get_neighbors(structure, resind: int, no_neighbors: int):
     """
 
     #find all resindices in the chain of input resind
-    chain_id = list(set(structure.select(f'resindex {resind}').getChids()))[0]
-    all_resinds = structure.select(f'chain {chain_id}').select('protein').getResindices()
+    all_resinds = chain_dict[resind]
     terminal = max(all_resinds)
     start = min(all_resinds) 
 
@@ -182,31 +187,39 @@ def _trim(dist_mat: np.ndarray):
     trimmed = np.concatenate(trimmed)
     return trimmed
 
-def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: int, trim=False):
+def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: int, coordination_number: tuple, trim: bool, no_neighbors: int):
+
+    features, identifiers = [], []
+    max_atoms = 4 * (coordination_number[1] + (coordination_number[1] * no_neighbors * 2))    
     backbone = structure.select('protein').select('name N C CA CB O') if c_beta else structure.select('protein').select('name N C CA O')
     dist_mat = buildDistMatrix(backbone, backbone)
 
     no_resis = len(set(backbone.getResindices()))
-    splits = [np.vsplit(x, no_resis) for x in np.hsplit(dist_mat, no_resis)]
+    splits = sum([np.vsplit(x, no_resis) for x in np.hsplit(dist_mat, no_resis)], [])
 
-    combinations = [(i,j) for i in range(0, no_resis) for j in range(0, no_resis)]
+    combinations = [(j,i) for i in range(0, no_resis) for j in range(0, no_resis)]
     split_mapper = dict([(combination, splits[ind]) for combination, ind in zip(combinations, range(len(combinations)))])
 
-    dist_mats = []
-    for clique in cliques:
-        combinations = [(i,j) for i in clique for j in clique]
-        _sub_matrices = [split_mapper[combination] for combination in combinations]
-        sub_matrices = [_sub_matrices[i:i + len(clique)] for i in range(0, len(_sub_matrices))]
-        matrix = np.block(sub_matrices)
+    chain_dict = _construct_chain_dict(structure)
+    for subclique in cliques:
+        for _clique in subclique:
+            clique = set(sum([_get_neighbors(resind, 1, chain_dict) for resind in list(_clique)], []))
+            combinations = list(itertools.product(*[clique, clique]))
 
-        padding = max_atoms - len(matrix)
-        matrix = np.lib.pad(matrix, ((0,padding), (0,padding)), 'constant', constant_values=0)
-        matrix = _trim(dist_mat) if trim else matrix.flatten()
-        dist_mats.append(matrix)
+            sub_matrices = np.array([split_mapper[combination] for combination in combinations])
+            m, n, r = sub_matrices.shape
+            matrix = sub_matrices.reshape(-1,len(clique),n,r).transpose(0,2,1,3).reshape(-1,len(clique)*r)
+            padded = np.zeros((max_atoms, max_atoms))
+            padded[0:len(matrix), 0:len(matrix)] = matrix
+            padded = _trim(padded) if trim else padded.flatten()
 
-    return dist_mats
+            features.append(padded)
+            identifiers.append(clique)
+            assert len(padded) == 2304
 
-def identify_sites_rational(pdb_file: str, cutoff: float, helix_cutoff: int, coordination_number=(2,4), no_neighbors=1):
+    return features, identifiers
+
+def identify_sites_rational(pdb_file: str, cutoff: float, c_beta: bool, trim=False, helix=False, helix_cutoff=None, coordination_number=(2,4), no_neighbors=1):
     """Main function that runs site enumeration.
 
     Args:
@@ -226,16 +239,20 @@ def identify_sites_rational(pdb_file: str, cutoff: float, helix_cutoff: int, coo
     c_alphas = structure.select('protein').select('name CA')
 
     #enumerate all helical residues in the input structure
-    helix_map = _get_helices(pdb_file, c_alphas)
-    helix_resindices = list(helix_map.keys())
-    helix_resindices.sort()
-    helix_resindices_selstr = 'resindex ' + ' '.join([str(i) for i in helix_resindices])
+    if helix:
+        helix_map = _get_helices(pdb_file, c_alphas)
+        helix_resindices = list(helix_map.keys())
+        helix_resindices.sort()
+        selstr = 'resindex ' + ' '.join([str(i) for i in helix_resindices])
+
+    else:
+        selstr = 'resindex ' + ' '.join([str(i) for i in c_alphas.getResindices()])
 
     #create dictionary to map resindices to chain IDs and residue numbers
     resind2id = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in set(structure.select('protein').getResindices())])
 
     #build alpha carbon distance matrix. iterate through columns and enumerate pairs of residues that are within a cutoff distance.
-    ca_dist_mat = buildDistMatrix(c_alphas.select(helix_resindices_selstr), c_alphas.select(helix_resindices_selstr))
+    ca_dist_mat = buildDistMatrix(c_alphas.select(selstr), c_alphas.select(selstr))
     edge_list = []
     edge_weights = np.array([])
     row_indexer = 0
@@ -261,23 +278,10 @@ def identify_sites_rational(pdb_file: str, cutoff: float, helix_cutoff: int, coo
     cliques = [np.vectorize(map2resind.get)(clique) for clique in cliques]
 
     #if a helix cutoff is provided, filter by number of donating helices
-    if helix_cutoff:
+    if helix_cutoff and helix:
         cliques = _filter_by_no_helices(cliques, helix_map, helix_cutoff)
 
-    #get neighbors and build flattened distance matrices
-    for sub_cliques in cliques:
-        for _clique in sub_cliques:
-            clique = set(sum([_get_neighbors(structure, resind, no_neighbors) for resind in list(_clique)], []))
-            selstr = 'resindex ' + ' '.join([str(i) for i in clique])
-            clique_backbone = structure.select('protein').select('name N C CA O').select(selstr)
+    features, identifiers = _construct_distance_matrices(cliques, structure, c_beta, max_atoms, coordination_number, trim, no_neighbors)
 
-            padding = max_atoms - clique_backbone.numAtoms()
-            flattened_dist_mat = np.lib.pad(buildDistMatrix(clique_backbone, clique_backbone), ((0,padding), (0,padding)), 'constant', constant_values=0).flatten()
-            assert len(flattened_dist_mat) == 2304
-
-            features.append(flattened_dist_mat)
-            identifiers.append([resind2id[resind] for resind in clique])
-            sources.append(pdb_file)
-
-    site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': sources})
+    site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': [pdb_file] * len(features)})
     return site_df
