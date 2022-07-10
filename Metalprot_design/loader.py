@@ -187,7 +187,7 @@ def _trim(dist_mat: np.ndarray):
     trimmed = np.concatenate(trimmed)
     return trimmed
 
-def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: int, coordination_number: tuple, trim: bool, no_neighbors: int):
+def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: int, coordination_number: tuple, trim: bool, no_neighbors: int, resind2id: dict):
 
     features, identifiers = [], []
     max_atoms = 4 * (coordination_number[1] + (coordination_number[1] * no_neighbors * 2))    
@@ -214,7 +214,7 @@ def _construct_distance_matrices(cliques, structure, c_beta: bool, max_atoms: in
             padded = _trim(padded) if trim else padded.flatten()
 
             features.append(padded)
-            identifiers.append(clique)
+            identifiers.append(set([resind2id[i] for i in clique]))
             assert len(padded) == 2304
 
     return features, identifiers
@@ -233,7 +233,7 @@ def identify_sites_rational(pdb_file: str, cutoff: float, c_beta: bool, trim=Fal
         site_df (pd.DataFrame): Contains flattened distance matrices, residue numbers and chain IDs, and source pdb file paths for all enumerated cores.
     """
 
-    features, identifiers, sources = [], [], []
+    features, identifiers = [], []
     max_atoms = 4 * (coordination_number[1] + (coordination_number[1] * no_neighbors * 2))
     structure = parsePDB(pdb_file)
     c_alphas = structure.select('protein').select('name CA')
@@ -241,15 +241,16 @@ def identify_sites_rational(pdb_file: str, cutoff: float, c_beta: bool, trim=Fal
     #enumerate all helical residues in the input structure
     if helix:
         helix_map = _get_helices(pdb_file, c_alphas)
-        helix_resindices = list(helix_map.keys())
-        helix_resindices.sort()
-        selstr = 'resindex ' + ' '.join([str(i) for i in helix_resindices])
+        resindices = list(helix_map.keys())
+        resindices.sort()
+        selstr = 'resindex ' + ' '.join([str(i) for i in resindices])
 
     else:
-        selstr = 'resindex ' + ' '.join([str(i) for i in c_alphas.getResindices()])
+        resindices = c_alphas.getResindices()
+        selstr = 'resindex ' + ' '.join([str(i) for i in resindices])
 
     #create dictionary to map resindices to chain IDs and residue numbers
-    resind2id = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in set(structure.select('protein').getResindices())])
+    resind2id = dict([(resindex, (structure.select(f'resindex {resindex}').getResnums()[0], structure.select(f'resindex {resindex}').getChids()[0])) for resindex in resindices])
 
     #build alpha carbon distance matrix. iterate through columns and enumerate pairs of residues that are within a cutoff distance.
     ca_dist_mat = buildDistMatrix(c_alphas.select(selstr), c_alphas.select(selstr))
@@ -259,11 +260,9 @@ def identify_sites_rational(pdb_file: str, cutoff: float, c_beta: bool, trim=Fal
     for col_ind in range(len(ca_dist_mat)):
         for row_ind in range(1+row_indexer, len(ca_dist_mat)):
             distance = ca_dist_mat[row_ind, col_ind]
-
             if distance <= cutoff:
-                edge_list.append(np.array([helix_resindices[col_ind], helix_resindices[row_ind]]))
+                edge_list.append(np.array([resindices[col_ind], resindices[row_ind]]))
                 edge_weights = np.append(edge_weights, distance)
-
         row_indexer += 1
 
     #filter by relative orientation of ca-cb bond vectors
@@ -278,10 +277,9 @@ def identify_sites_rational(pdb_file: str, cutoff: float, c_beta: bool, trim=Fal
     cliques = [np.vectorize(map2resind.get)(clique) for clique in cliques]
 
     #if a helix cutoff is provided, filter by number of donating helices
-    if helix_cutoff and helix:
+    if helix:
         cliques = _filter_by_no_helices(cliques, helix_map, helix_cutoff)
 
-    features, identifiers = _construct_distance_matrices(cliques, structure, c_beta, max_atoms, coordination_number, trim, no_neighbors)
-
+    features, identifiers = _construct_distance_matrices(cliques, structure, c_beta, max_atoms, coordination_number, trim, no_neighbors, resind2id)
     site_df = pd.DataFrame({'features': features, 'identifiers': identifiers, 'sources': [pdb_file] * len(features)})
     return site_df
